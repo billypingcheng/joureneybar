@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智慧旅遊規劃師 Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+        /* 隱藏 Scrollbar 但保持滑動 */
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-slate-50">
+
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState } = React;
+
+        // --- 資料設定 ---
+        
+        // 地點資料庫 (分區域)
+        const LOCATION_DATA = {
+            japan: {
+                '北海道/東北': ['北海道(全域)', '札幌', '函館', '仙台', '青森', '藏王'],
+                '關東 (東京周邊)': ['東京', '橫濱', '箱根/河口湖', '輕井澤', '鎌倉', '日光'],
+                '中部/北陸': ['名古屋', '合掌村', '金澤', '立山黑部', '伊豆'],
+                '關西 (京阪神)': ['大阪', '京都', '奈良', '神戶', '環球影城'],
+                '中國/四國': ['廣島', '岡山', '鳥取', '瀨戶內海'],
+                '九州/沖繩': ['福岡', '熊本', '別府', '鹿兒島', '沖繩']
+            },
+            taiwan: {
+                '北部': ['台北', '九份/基隆', '宜蘭', '桃園', '新竹'],
+                '中部': ['台中', '日月潭', '清境/合歡山', '苗栗', '鹿港'],
+                '南部': ['台南', '高雄', '墾丁', '嘉義/阿里山'],
+                '東部': ['花蓮', '太魯閣', '台東', '知本'],
+                '離島': ['澎湖', '金門', '馬祖', '小琉球', '蘭嶼/綠島']
+            }
+        };
+
+        const PREFERENCE_OPTIONS = ['美食巡禮', '購物血拼', '自然美景', '歷史文化', '主題樂園', '溫泉放鬆', '動漫朝聖', '極限運動', '攝影打卡'];
+
+        // --- 主程式 ---
+        function TravelPlannerApp() {
+            const [step, setStep] = useState('input'); // input, loading, result_ai, result_human
+            
+            // 表單狀態
+            const [formData, setFormData] = useState({
+                travelers: 1,
+                relation: 'solo',
+                destCountry: 'japan', // 目前選擇的國家頁籤
+                selectedDestinations: [], // 複選的地點陣列
+                preferences: {}, // 物件儲存權重 {'food': 1, 'shop': 2}
+                transport: 'public',
+                budget: '',
+                duration: 5,
+                contact: ''
+            });
+
+            const [aiResult, setAiResult] = useState('');
+
+            // 通用變更處理
+            const handleChange = (e) => {
+                const { name, value } = e.target;
+                setFormData(prev => ({ ...prev, [name]: value }));
+            };
+
+            // 切換國家頁籤
+            const handleCountrySwitch = (country) => {
+                setFormData(prev => ({ 
+                    ...prev, 
+                    destCountry: country,
+                    selectedDestinations: [] // 切換國家時清空已選地點
+                }));
+            };
+
+            // 處理地點複選
+            const toggleDestination = (place) => {
+                setFormData(prev => {
+                    const current = prev.selectedDestinations;
+                    const isSelected = current.includes(place);
+                    if (isSelected) {
+                        return { ...prev, selectedDestinations: current.filter(p => p !== place) };
+                    } else {
+                        return { ...prev, selectedDestinations: [...current, place] };
+                    }
+                });
+            };
+
+            // 處理偏好 (三段式：0=無, 1=普通, 2=最愛)
+            const togglePreference = (pref) => {
+                setFormData(prev => {
+                    const currentLevel = prev.preferences[pref] || 0;
+                    let nextLevel = 0;
+                    
+                    if (currentLevel === 0) nextLevel = 1;       // 未選 -> 普通
+                    else if (currentLevel === 1) nextLevel = 2;  // 普通 -> 最愛
+                    else nextLevel = 0;                          // 最愛 -> 取消
+
+                    const newPrefs = { ...prev.preferences };
+                    if (nextLevel === 0) delete newPrefs[pref];
+                    else newPrefs[pref] = nextLevel;
+
+                    return { ...prev, preferences: newPrefs };
+                });
+            };
+
+            // 提交按鈕
+            const handleSubmit = (mode) => {
+                if (formData.selectedDestinations.length === 0) {
+                    alert("請至少選擇一個想去的地點！");
+                    return;
+                }
+                if (mode === 'human' && !formData.contact) {
+                    alert("請填寫聯絡方式，以便我們為您服務！");
+                    return;
+                }
+
+                setStep('loading');
+
+                // 模擬 AI 生成邏輯
+                setTimeout(() => {
+                    if (mode === 'ai') {
+                        const highPriority = Object.keys(formData.preferences).filter(k => formData.preferences[k] === 2);
+                        const normalPriority = Object.keys(formData.preferences).filter(k => formData.preferences[k] === 1);
+                        
+                        const result = `
+### 🗺️ ${formData.duration} 天行程規劃 (${formData.destCountry === 'japan' ? '🇯🇵 日本' : '🇹🇼 台灣'})
+
+**📍 地點：${formData.selectedDestinations.join(' + ')}**
+**❤️ 核心重點：${highPriority.length > 0 ? highPriority.join(' (必去) ') : '均衡探索'}**
+${normalPriority.length > 0 ? `➕ 搭配元素：${normalPriority.join('、')}` : ''}
+
+---
+**Day 1：抵達與Check-in**
+交通：搭乘${formData.transport === 'car' ? '租車' : '機場快線'}前往市區。
+行程：${highPriority.includes('美食巡禮') ? '直奔當地人氣排隊名店晚餐' : '飯店周邊輕鬆散策'}。
+
+**Day 2：${formData.selectedDestinations[0] || '市區'}深度遊**
+上午：${highPriority.includes('歷史文化') ? '古蹟巡禮導覽' : '市中心地標打卡'}。
+下午：${highPriority.includes('購物血拼') ? 'Outlet/百貨公司戰利品採購' : '特色咖啡廳休息'}。
+
+**Day 3：${formData.selectedDestinations.length > 1 ? '移動日：前往 ' + formData.selectedDestinations[1] : '近郊探險'}**
+全天：安排跨城市移動，沿途欣賞風景，或是深入探索近郊秘境。
+
+*(這是 AI 自動生成的模擬範本，實際串接後會根據您的複雜需求提供更精準的路線)*
+                        `;
+                        setAiResult(result);
+                        setStep('result_ai');
+                    } else {
+                        setStep('result_human');
+                    }
+                }, 2000);
+            };
+
+            return (
+                <div className="min-h-screen py-6 px-4 font-sans text-gray-800 flex justify-center">
+                    <div className="w-full max-w-4xl bg-white rounded-3xl shadow-2xl overflow-hidden">
+                        
+                        {/* Header */}
+                        <div className="bg-slate-800 text-white p-6 text-center">
+                            <h1 className="text-2xl md:text-3xl font-bold tracking-wider">TripGenius 旅程規劃</h1>
+                            <p className="text-slate-400 text-sm mt-1">打造您獨一無二的日本/台灣之旅</p>
+                        </div>
+
+                        {/* Body */}
+                        <div className="p-4 md:p-8">
+                            
+                            {step === 'input' && (
+                                <div className="space-y-8 animate-fade-in">
+                                    
+                                    {/* 1. 基礎設定 */}
+                                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                                        <h3 className="text-lg font-bold text-slate-700 mb-4 flex items-center">
+                                            <span className="bg-slate-200 text-slate-700 w-6 h-6 rounded-full flex items-center justify-center text-sm mr-2">1</span>
+                                            基本資訊
+                                        </h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            <div>
+                                                <label className="text-xs font-bold text-gray-500 uppercase">旅遊人數</label>
+                                                <div className="mt-1 flex items-center bg-slate-50 rounded-lg px-3 py-2">
+                                                    <span className="mr-2">👥</span>
+                                                    <input type="number" name="travelers" value={formData.travelers} onChange={handleChange} className="w-full bg-transparent outline-none" min="1"/>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="text-xs font-bold text-gray-500 uppercase">旅遊天數</label>
+                                                <div className="mt-1 flex items-center bg-slate-50 rounded-lg px-3 py-2">
+                                                    <span className="mr-2">📅</span>
+                                                    <input type="number" name="duration" value={formData.duration} onChange={handleChange} className="w-full bg-transparent outline-none" min="1"/>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="text-xs font-bold text-gray-500 uppercase">同行關係</label>
+                                                <div className="mt-1 flex items-center bg-slate-50 rounded-lg px-3 py-2">
+                                                    <span className="mr-2">❤️</span>
+                                                    <select name="relation" value={formData.relation} onChange={handleChange} className="w-full bg-transparent outline-none">
+                                                        <option value="solo">獨旅 Solo</option>
+                                                        <option value="couple">夫妻/情侶</option>
+                                                        <option value="family_kids">親子 (有小孩)</option>
+                                                        <option value="family_elders">家族 (帶長輩)</option>
+                                                        <option value="friends">朋友/同學</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* 2. 地點選擇 (進化版) */}
+                                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                                        <h3 className="text-lg font-bold text-slate-700 mb-4 flex items-center">
+                                            <span className="bg-slate-200 text-slate-700 w-6 h-6 rounded-full flex items-center justify-center text-sm mr-2">2</span>
+                                            想去哪裡？ (可跨區複選)
+                                        </h3>
+                                        
+                                        {/* 國家切換 */}
+                                        <div className="flex space-x-2 mb-4 border-b pb-2">
+                                            <button onClick={() => handleCountrySwitch('japan')} className={`flex-1 py-2 text-center font-bold rounded-t-lg transition ${formData.destCountry === 'japan' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-400 hover:bg-gray-100'}`}>
+                                                🇯🇵 日本 Japan
+                                            </button>
+                                            <button onClick={() => handleCountrySwitch('taiwan')} className={`flex-1 py-2 text-center font-bold rounded-t-lg transition ${formData.destCountry === 'taiwan' ? 'bg-teal-600 text-white shadow-md' : 'text-gray-400 hover:bg-gray-100'}`}>
+                                                🇹🇼 台灣 Taiwan
+                                            </button>
+                                        </div>
+
+                                        {/* 區域列表 */}
+                                        <div className="space-y-5 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+                                            {Object.entries(LOCATION_DATA[formData.destCountry]).map(([region, cities]) => (
+                                                <div key={region}>
+                                                    <h4 className="text-sm font-bold text-gray-400 mb-2 pl-1 border-l-4 border-slate-300">{region}</h4>
+                                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                                        {cities.map(city => (
+                                                            <button 
+                                                                key={city} 
+                                                                onClick={() => toggleDestination(city)}
+                                                                className={`text-sm py-2 px-1 rounded-lg transition border ${
+                                                                    formData.selectedDestinations.includes(city)
+                                                                    ? (formData.destCountry === 'japan' ? 'bg-blue-50 border-blue-500 text-blue-700 font-bold' : 'bg-teal-50 border-teal-500 text-teal-700 font-bold')
+                                                                    : 'bg-white border-gray-200 text-gray-600 hover:border-gray-400'
+                                                                }`}
+                                                            >
+                                                                {formData.selectedDestinations.includes(city) && '✓ '}{city}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* 3. 偏好權重 (進化版) */}
+                                    <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                                        <div className="flex justify-between items-center mb-3">
+                                            <h3 className="text-lg font-bold text-slate-700 flex items-center">
+                                                <span className="bg-slate-200 text-slate-700 w-6 h-6 rounded-full flex items-center justify-center text-sm mr-2">3</span>
+                                                旅遊風格
+                                            </h3>
+                                            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">點一下選取，點兩下變「必去★」</span>
+                                        </div>
+                                        <div className="flex flex-wrap gap-3">
+                                            {PREFERENCE_OPTIONS.map(pref => {
+                                                const level = formData.preferences[pref] || 0;
+                                                return (
+                                                    <button 
+                                                        key={pref}
+                                                        onClick={() => togglePreference(pref)}
+                                                        className={`px-4 py-2 rounded-full text-sm font-medium transition-all transform active:scale-95 border ${
+                                                            level === 2 ? 'bg-rose-500 text-white border-rose-600 shadow-md' :
+                                                            level === 1 ? 'bg-blue-100 text-blue-700 border-blue-300' :
+                                                            'bg-white text-gray-400 border-dashed border-gray-300 hover:border-gray-400'
+                                                        }`}
+                                                    >
+                                                        {level === 2 ? '★ ' : ''}{pref}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* 4. 交通預算與聯絡 */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                                            <label className="text-xs font-bold text-gray-500 uppercase block mb-2">交通方式</label>
+                                            <select name="transport" value={formData.transport} onChange={handleChange} className="w-full p-2 border rounded-lg bg-white outline-none">
+                                                <option value="public">🚆 大眾運輸 (地鐵/JR)</option>
+                                                <option value="car">🚗 自駕租車</option>
+                                                <option value="charter">🚕 包車服務</option>
+                                            </select>
+                                        </div>
+                                        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+                                            <label className="text-xs font-bold text-gray-500 uppercase block mb-2">每人預算 (台幣)</label>
+                                            <input type="text" name="budget" value={formData.budget} onChange={handleChange} placeholder="例：35000" className="w-full p-2 border rounded-lg outline-none" />
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-yellow-50 p-4 rounded-2xl border border-yellow-200">
+                                        <label className="text-xs font-bold text-yellow-700 uppercase block mb-2">📮 聯絡資訊 (取得詳細報價用)</label>
+                                        <input type="text" name="contact" value={formData.contact} onChange={handleChange} placeholder="您的 Line ID 或 Email" className="w-full p-2 border border-yellow-300 rounded-lg bg-white outline-none" />
+                                    </div>
+
+                                    {/* Action Buttons */}
+                                    <div className="flex gap-4 pt-2">
+                                        <button onClick={() => handleSubmit('ai')} className="flex-1 bg-slate-700 text-white py-3 rounded-xl font-bold hover:bg-slate-800 transition shadow-lg">
+                                            🤖 AI 快速預覽
+                                        </button>
+                                        <button onClick={() => handleSubmit('human')} className="flex-1 bg-gradient-to-r from-blue-500 to-teal-500 text-white py-3 rounded-xl font-bold hover:opacity-90 transition shadow-lg">
+                                            ✨ 專人客製規劃
+                                        </button>
+                                    </div>
+
+                                </div>
+                            )}
+
+                            {step === 'loading' && (
+                                <div className="text-center py-20 animate-fade-in">
+                                    <div className="w-16 h-16 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin mx-auto mb-6"></div>
+                                    <h3 className="text-xl font-bold text-slate-700">正在為您規劃路線...</h3>
+                                    <p className="text-slate-500 mt-2">分析地點：{formData.selectedDestinations.join('、')}</p>
+                                </div>
+                            )}
+
+                            {step === 'result_ai' && (
+                                <div className="animate-fade-in">
+                                    <div className="flex justify-between items-end mb-6 border-b pb-4">
+                                        <h2 className="text-2xl font-bold text-slate-800">您的行程初稿</h2>
+                                        <button onClick={() => setStep('input')} className="text-sm text-slate-500 hover:text-slate-800 underline">修改條件</button>
+                                    </div>
+                                    <div className="bg-slate-50 p-6 rounded-xl text-slate-700 leading-relaxed whitespace-pre-line mb-6">
+                                        {aiResult}
+                                    </div>
+                                    <button className="w-full bg-slate-800 text-white py-4 rounded-xl font-bold shadow-lg hover:bg-black transition">
+                                        喜歡這個規劃？ 聯絡我們落實行程
+                                    </button>
+                                </div>
+                            )}
+
+                             {step === 'result_human' && (
+                                <div className="text-center py-12 animate-fade-in">
+                                    <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-4xl mx-auto mb-6">✓</div>
+                                    <h2 className="text-2xl font-bold text-slate-800 mb-2">需求已送出！</h2>
+                                    <p className="text-slate-500 max-w-md mx-auto">我們已收到您想去 <span className="font-bold text-slate-800">{formData.selectedDestinations.join('、')}</span> 的需求。<br/>顧問將儘速透過 {formData.contact} 與您聯繫。</p>
+                                    <button onClick={() => setStep('input')} className="mt-8 text-slate-400 hover:text-slate-600">返回首頁</button>
+                                </div>
+                            )}
+
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<TravelPlannerApp />);
+    </script>
+</body>
+</html>
